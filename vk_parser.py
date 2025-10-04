@@ -9,6 +9,7 @@ class VKParser:
         self.access_token = VK_ACCESS_TOKEN
         self.user_id = VK_USER_ID
         self.base_url = "https://api.vk.com/method"
+        self.min_listens = MIN_LISTENS  # Сохраняем значение
         
     def extract_audio_info(self, url: str) -> Optional[Dict]:
         """Извлекает информацию об аудио из ссылки ВК"""
@@ -95,7 +96,7 @@ class VKParser:
                 results = []
                 for playlist in playlists:
                     listens = playlist.get('plays', 0)
-                    if listens >= MIN_LISTENS:
+                    if listens >= self.min_listens:  # Используем self.min_listens
                         owner_info = self.get_user_info(playlist['owner_id'])
                         results.append({
                             'playlist': playlist,
