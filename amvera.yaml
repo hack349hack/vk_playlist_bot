@@ -1,0 +1,18 @@
+# amvera.yaml
+meta:
+  environment: python
+  toolchain:
+    name: pip
+    version: 3.11
+
+build:
+  requirementsPath: requirements.txt
+
+run:
+  command: python app.py
+  containerPort: 80
+
+environment:
+  BOT_TOKEN: YOUR_BOT_TOKEN_HERE
+  VK_USER_ID: YOUR_VK_USER_ID
+  VK_ACCESS_TOKEN: YOUR_VK_ACCESS_TOKEN
