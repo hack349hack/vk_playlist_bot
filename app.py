@@ -2,7 +2,7 @@ import logging
 import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
-from config import BOT_TOKEN, MAX_PLAYLISTS_TO_SHOW
+from config import BOT_TOKEN, MAX_PLAYLISTS_TO_SHOW, MIN_LISTENS
 from vk_parser import VKParser
 
 # Настройка логирования
@@ -16,6 +16,7 @@ class VKPlaylistBot:
     def __init__(self):
         self.parser = VKParser()
         self.application = Application.builder().token(BOT_TOKEN).build()
+        self.min_listens = MIN_LISTENS
         
         # Регистрация обработчиков
         self.application.add_handler(CommandHandler("start", self.start))
@@ -25,7 +26,7 @@ class VKPlaylistBot:
     
     async def start(self, update: Update, context: CallbackContext) -> None:
         """Обработчик команды /start"""
-        welcome_text = """
+        welcome_text = f"""
 🎵 Привет! Я бот для поиска плейлистов ВКонтакте.
 
 Я могу помочь найти плейлисты по всему ВКонтакте, в которых есть определенный трек.
@@ -34,7 +35,7 @@ class VKPlaylistBot:
 1. Отправь мне название трека (например: "Саша Выше, Postskriptum v.l.g. - Сердце Героя")
 2. Или отправь ссылку на трек ВКонтакте
 
-🔍 Я найду все плейлисты с этим треком (где больше 200 прослушиваний) и отсортирую их по популярности.
+🔍 Я найду все плейлисты с этим треком (где больше {self.min_listens} прослушиваний) и отсортирую их по популярности.
 
 💡 Отличный инструмент для продвижения музыки!
         """
@@ -42,7 +43,7 @@ class VKPlaylistBot:
     
     async def help(self, update: Update, context: CallbackContext) -> None:
         """Обработчик команды /help"""
-        help_text = """
+        help_text = f"""
 🔍 Поиск плейлистов ВКонтакте
 
 Просто отправь мне:
@@ -54,7 +55,7 @@ class VKPlaylistBot:
 "https://vk.com/audio123456789_123456789"
 "audio-123456789_123456789"
 
-📊 Бот покажет только плейлисты с 200+ прослушиваний
+📊 Бот покажет только плейлисты с {self.min_listens}+ прослушиваний
 🎯 Сортировка по популярности
 👥 Показывает авторов плейлистов
         """
@@ -67,6 +68,7 @@ class VKPlaylistBot:
             debug_text = f"🔧 Отладочная информация:\n\n"
             debug_text += f"Токен: {'✅' if self.parser.access_token else '❌'}\n"
             debug_text += f"User ID: {self.parser.user_id}\n"
+            debug_text += f"MIN_LISTENS: {self.min_listens}\n"
             debug_text += f"Инфо о пользователе: {user_info}\n"
             await update.message.reply_text(debug_text)
         except Exception as e:
@@ -108,7 +110,7 @@ class VKPlaylistBot:
                     f"❌ Не найдено плейлистов с этим треком\n\n"
                     f"Возможные причины:\n"
                     f"• Трек не найден в ВКонтакте\n"
-                    f"• Плейлисты с треком имеют меньше {MIN_LISTENS} прослушиваний\n"
+                    f"• Плейлисты с треком имеют меньше {self.min_listens} прослушиваний\n"
                     f"• Трек не добавлен в публичные плейлисты"
                 )
                 return
