@@ -1,5 +1,6 @@
 import requests
 import re
+import time
 from typing import List, Dict, Optional
 from config import VK_ACCESS_TOKEN, VK_USER_ID, MIN_LISTENS
 
@@ -17,10 +18,23 @@ class VKParser:
                 pattern = r'audio-?(\d+)_(\d+)'
                 match = re.search(pattern, url)
                 if match:
-                    return {'owner_id': match.group(1), 'audio_id': match.group(2)}
+                    return {
+                        'owner_id': int(match.group(1)), 
+                        'audio_id': int(match.group(2))
+                    }
+            
+            # Для ссылок вида vk.com/audio123456789_123456789
+            pattern = r'audio(\d+)_(\d+)'
+            match = re.search(pattern, url)
+            if match:
+                return {
+                    'owner_id': int(match.group(1)), 
+                    'audio_id': int(match.group(2))
+                }
             
             # Для поиска по названию
             return {'search_query': url}
+            
         except Exception as e:
             print(f"Error extracting audio info: {e}")
             return None
@@ -33,8 +47,9 @@ class VKParser:
                 'access_token': self.access_token,
                 'v': '5.131',
                 'q': query,
-                'count': 1,
-                'auto_complete': 1
+                'count': 10,  # Увеличиваем для лучшего поиска
+                'auto_complete': 1,
+                'sort': 2  # По популярности
             }
             
             response = requests.get(url, params=params)
@@ -47,93 +62,141 @@ class VKParser:
                     'owner_id': audio['owner_id'],
                     'artist': audio['artist'],
                     'title': audio['title'],
-                    'duration': audio['duration']
+                    'duration': audio['duration'],
+                    'url': f"audio{audio['owner_id']}_{audio['id']}"
                 }
             return None
         except Exception as e:
             print(f"Error searching audio: {e}")
             return None
     
-    def get_user_playlists(self) -> List[Dict]:
-        """Получает все плейлисты пользователя"""
+    def search_playlists_global_by_audio(self, owner_id: int, audio_id: int) -> List[Dict]:
+        """Глобальный поиск плейлистов по аудио"""
         try:
-            url = f"{self.base_url}/audio.getPlaylists"
+            print(f"Searching playlists for audio: {owner_id}_{audio_id}")
+            
+            url = f"{self.base_url}/audio.getPlaylistsByAudio"
             params = {
                 'access_token': self.access_token,
                 'v': '5.131',
-                'owner_id': self.user_id,
-                'count': 100
+                'audio_id': f"{owner_id}_{audio_id}",
+                'count': 100  # Максимальное количество
             }
             
             response = requests.get(url, params=params)
             data = response.json()
             
-            if 'response' in data:
-                return data['response']['items']
-            return []
-        except Exception as e:
-            print(f"Error getting playlists: {e}")
-            return []
-    
-    def search_audio_in_playlists(self, audio_owner_id: int, audio_id: int) -> List[Dict]:
-        """Ищет аудио во всех плейлистах пользователя"""
-        try:
-            playlists = self.get_user_playlists()
-            results = []
+            print(f"API Response: {data}")
             
-            for playlist in playlists:
-                # Получаем аудио из плейлиста
-                url = f"{self.base_url}/audio.get"
-                params = {
-                    'access_token': self.access_token,
-                    'v': '5.131',
-                    'owner_id': playlist['owner_id'],
-                    'playlist_id': playlist['id'],
-                    'count': 1000
-                }
+            if 'response' in data and 'items' in data['response']:
+                playlists = data['response']['items']
+                print(f"Found {len(playlists)} playlists")
                 
-                response = requests.get(url, params=params)
-                data = response.json()
-                
-                if 'response' in data:
-                    audio_items = data['response']['items']
+                results = []
+                for playlist in playlists:
                     listens = playlist.get('plays', 0)
-                    
-                    # Проверяем наличие нужного аудио
-                    for audio in audio_items:
-                        if (audio['owner_id'] == audio_owner_id and 
-                            audio['id'] == audio_id and 
-                            listens >= MIN_LISTENS):
-                            
-                            results.append({
-                                'playlist': playlist,
-                                'listens': listens,
-                                'playlist_url': f"https://vk.com/music/playlist/{playlist['owner_id']}_{playlist['id']}"
-                            })
-                            break
+                    if listens >= MIN_LISTENS:
+                        owner_info = self.get_user_info(playlist['owner_id'])
+                        results.append({
+                            'playlist': playlist,
+                            'listens': listens,
+                            'playlist_url': f"https://vk.com/music/playlist/{playlist['owner_id']}_{playlist['id']}",
+                            'owner_info': owner_info
+                        })
+                
+                # Сортируем по количеству прослушиваний
+                results.sort(key=lambda x: x['listens'], reverse=True)
+                return results
             
-            # Сортируем по количеству прослушиваний
-            results.sort(key=lambda x: x['listens'], reverse=True)
-            return results
+            return []
             
         except Exception as e:
-            print(f"Error searching in playlists: {e}")
+            print(f"Error in global audio search: {e}")
             return []
 
-    def search_by_query_in_playlists(self, query: str) -> List[Dict]:
-        """Ищет трек по названию во всех плейлистах"""
+    def search_playlists_global_by_query(self, query: str) -> List[Dict]:
+        """Глобальный поиск плейлистов по названию трека"""
         try:
-            # Сначала ищем сам трек
+            print(f"Searching audio for query: {query}")
+            
+            # Сначала находим трек
             audio_info = self.search_audio(query)
             if not audio_info:
+                print("Audio not found")
                 return []
             
-            # Затем ищем в плейлистах
-            return self.search_audio_in_playlists(
+            print(f"Found audio: {audio_info['artist']} - {audio_info['title']}")
+            
+            # Затем ищем плейлисты с этим треком
+            return self.search_playlists_global_by_audio(
                 audio_info['owner_id'], 
                 audio_info['id']
             )
             
         except Exception as e:
-            print(f"Error searching by query: {e}")
+            print(f"Error in global query search: {e}")
             return []
+
+    def get_user_info(self, user_id: int) -> Dict:
+        """Получает информацию о пользователе"""
+        try:
+            # Для групп (отрицательные ID)
+            if user_id < 0:
+                url = f"{self.base_url}/groups.getById"
+                params = {
+                    'access_token': self.access_token,
+                    'v': '5.131',
+                    'group_ids': abs(user_id),
+                    'fields': 'name,screen_name'
+                }
+                
+                response = requests.get(url, params=params)
+                data = response.json()
+                
+                if 'response' in data and data['response']:
+                    group = data['response'][0]
+                    return {
+                        'first_name': group['name'],
+                        'last_name': '',
+                        'profile_url': f"https://vk.com/{group.get('screen_name', '')}",
+                        'is_group': True
+                    }
+            else:
+                # Для пользователей
+                url = f"{self.base_url}/users.get"
+                params = {
+                    'access_token': self.access_token,
+                    'v': '5.131',
+                    'user_ids': user_id,
+                    'fields': 'first_name,last_name,screen_name'
+                }
+                
+                response = requests.get(url, params=params)
+                data = response.json()
+                
+                if 'response' in data and data['response']:
+                    user = data['response'][0]
+                    return {
+                        'first_name': user['first_name'],
+                        'last_name': user['last_name'],
+                        'profile_url': f"https://vk.com/{user.get('screen_name', 'id' + str(user_id))}",
+                        'is_group': False
+                    }
+            return {}
+            
+        except Exception as e:
+            print(f"Error getting user info: {e}")
+            return {}
+
+    def get_current_user(self):
+        """Получает информацию о текущем пользователе (для отладки)"""
+        try:
+            url = f"{self.base_url}/users.get"
+            params = {
+                'access_token': self.access_token,
+                'v': '5.131'
+            }
+            response = requests.get(url, params=params)
+            return response.json()
+        except Exception as e:
+            return {'error': str(e)}
