@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Получение токена ВК</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        
+        .step {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .step-number {
+            background: #007aff;
+            color: white;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #0056cc;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-success {
+            background: #34c759;
+        }
+        
+        .token-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        
+        .token-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .success {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .success-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Получение токена ВК</h1>
+        
+        <div id="auth-section">
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Авторизация ВКонтакте</strong>
+            </div>
+            
+            <p style="margin-bottom: 15px; text-align: center;">
+                Нажмите кнопку ниже для авторизации
+            </p>
+            
+            <button class="btn" onclick="openVKAuth()">
+                📱 Авторизоваться ВКонтакте
+            </button>
+            
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Получение токена</strong>
+            </div>
+            
+            <p style="margin-bottom: 15px;">
+                После авторизации скопируйте токен из адресной строки браузера
+            </p>
+            
+            <input 
+                type="text" 
+                id="token-input" 
+                class="token-input" 
+                placeholder="vk1.a.ваш_токен..."
+                oninput="validateToken(this.value)"
+            >
+            
+            <button class="btn btn-success" id="submit-btn" onclick="submitToken()" disabled>
+                ✅ Отправить токен боту
+            </button>
+            
+            <button class="btn btn-secondary" onclick="closeWebApp()">
+                ❌ Отмена
+            </button>
+        </div>
+        
+        <div id="success-section" class="hidden success">
+            <div class="success-icon">✅</div>
+            <h2>Токен успешно отправлен!</h2>
+            <p>Закройте это окно и вернитесь в бота</p>
+            <button class="btn" onclick="closeWebApp()">
+                Закрыть
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram Web App
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.BackButton.hide();
+        
+        function openVKAuth() {
+            // Открываем авторизацию ВК в новом окне
+            const authUrl = 'https://oauth.vk.com/authorize?client_id=6146827&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=audio&response_type=token&v=5.199';
+            window.open(authUrl, '_blank');
+        }
+        
+        function validateToken(token) {
+            const submitBtn = document.getElementById('submit-btn');
+            if (token.startsWith('vk1.a.')) {
+                submitBtn.disabled = false;
+                submitBtn.style.background = '#34c759';
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.style.background = '#007aff';
+            }
+        }
+        
+        function submitToken() {
+            const token = document.getElementById('token-input').value.trim();
+            
+            if (token.startsWith('vk1.a.')) {
+                // Отправляем токен обратно в бота
+                tg.sendData(JSON.stringify({
+                    action: 'vk_token',
+                    token: token
+                }));
+                
+                // Показываем успех
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('success-section').classList.remove('hidden');
+            }
+        }
+        
+        function closeWebApp() {
+            tg.close();
+        }
+        
+        // Автоматическое определение токена из URL (если вернулись с редиректом)
+        function checkUrlForToken() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tokenFromUrl = urlParams.get('token');
+            
+            if (tokenFromUrl && tokenFromUrl.startsWith('vk1.a.')) {
+                document.getElementById('token-input').value = tokenFromUrl;
+                validateToken(tokenFromUrl);
+            }
+        }
+        
+        // Проверяем URL при загрузке
+        checkUrlForToken();
+    </script>
+</body>
+</html>
